@@ -1,8 +1,5 @@
 #include <Arduino.h>
-//#include <SPI.h>
 #include <Ethernet.h>
-//#include <SD.h>
-//#include <EthernetUdp.h>
 #include <avr/wdt.h>
 
 //#define MQTT_MAX_PACKET_SIZE 256
@@ -13,15 +10,15 @@
 
 
 
-#define NDEBUG
+//#define NDEBUG
 
 //16 - постановка на охрану
 //4 - снятие с охраны
 #define CHECK_PULSES_INTERVAL 4
 #define ALARM_PIN 3
 #define ETHERNET_RESET_PIN  4
-#define MQTTUPDATEINTERVAL 120000 //3760000 //940000
-#define MQTTCHECKINTERVAL 16 //840000 //940000
+#define MQTTUPDATEINTERVAL 120
+
 
 uint8_t mqttUnaviable = 0;
 
@@ -57,7 +54,7 @@ uint8_t prevAlarmState = 5;
   uint8_t portState = 2;
   uint8_t prevPortState = 0;
 
-int co = 0;
+//int co = 0;
 int volatile newco = -1;
 uint8_t interruptCounter = 0;
 uint8_t interruptCounter2 = 0;
@@ -70,8 +67,6 @@ int SecondStamp=0;
 int Once=0;
 
 
-long lastMQTTUpdate = 0;
-long lastMQTTCheckUpdate = 0;
 
 bool bDHCPError = false;
 
@@ -94,40 +89,12 @@ void timer_handle_interrupts(int timer) {
     interruptCounter2++;
 
 
-    if( interruptCounter2 == MQTTCHECKINTERVAL )
+    if( interruptCounter2 == MQTTUPDATEINTERVAL && interruptCounter != CHECK_PULSES_INTERVAL)
     {
 
-      #ifdef NDEBUG
-        Serial.println("Check MQTT ");
-      #endif
+              bReportAll = true;
+              sendDataToMQTT();
 
-       checkMQTT();
-
-       if (mqttAPI.connected())
-       {
-         digitalWrite(6, HIGH);
-         mqttUnaviable =0;
-
-         #ifdef NDEBUG
-           Serial.println("MQTT API connected");
-         #endif
-
-       } else if (!bDHCPError)
-       {
-           //setColorState(3);
-           digitalWrite(6, LOW);
-           mqttUnaviable++;
-
-           #ifdef NDEBUG
-             Serial.print("mqttUnaviable: ");
-             Serial.println(mqttUnaviable, DEC);
-           #endif
-
-           if (mqttUnaviable > 21)
-           {
-              resetBoard();
-           }
-       }
 
        interruptCounter2 = 0;
     }
@@ -144,7 +111,7 @@ void timer_handle_interrupts(int timer) {
         #endif
 
 
-        if ( newco >= 2 &&  newco <= 8 ) //&& currentAlarmState != prevAlarmState
+        if ( newco >= 3 &&  newco <= 5 )
         {
           //prevAlarmState = currentAlarmState;
           currentAlarmState = 2;
@@ -152,7 +119,7 @@ void timer_handle_interrupts(int timer) {
           Serial.println("Срабатывание сигнализации.");
           #endif
         }
-        else if ( newco >= 10 && newco <= 20 ) //&& currentAlarmState != prevAlarmState
+        else if ( newco >= 15 && newco <= 17 )
         {
           //prevAlarmState = currentAlarmState;
           currentAlarmState = 3;
@@ -206,14 +173,13 @@ void timer_handle_interrupts(int timer) {
       if ( currentAlarmState != prevAlarmState  )
       {
 
-        //if (prevAlarmState != 5)
-        //{
+
           #ifdef NDEBUG
           Serial.println("Report to MQTT");
           #endif
 
           sendDataToMQTT();
-        //}
+
         prevAlarmState = currentAlarmState;
       }
 
@@ -233,7 +199,6 @@ void setup ()
         Serial.println(co,DEC);
     #endif
 
-    //digitalWrite(5, HIGH);
 
     //set MQTT connect state
     digitalWrite(6, LOW);
@@ -270,7 +235,7 @@ if ( Ethernet.begin(mac) == 0)
 
 timer_init_ISR_1Hz(TIMER_DEFAULT);
 
-setupMQTT();
+
 
 }
 
@@ -280,34 +245,24 @@ void loop ()
   switch (Ethernet.maintain()) {
       case 1:
         //renewed fail
-        //Serial.println("Error: renewed fail");
-             //setColorState(2);
-             //delay(1000);
+
              resetBoard();
         break;
 
       case 2:
         //renewed success
-        //Serial.println("Renewed success");
-        //print your local IP address:
-        //Serial.print("My IP address: ");
-        //Serial.println(Ethernet.localIP());
+
         break;
 
       case 3:
         //rebind fail
-        //Serial.println("Error: rebind fail");
-             //setColorState(2);
-             //delay(1000);
+
              resetBoard();
         break;
 
       case 4:
         //rebind success
-        //Serial.println("Rebind success");
-        //print your local IP address:
-        //Serial.print("My IP address: ");
-        //Serial.println(Ethernet.localIP());
+
         break;
 
       default:
@@ -317,78 +272,9 @@ void loop ()
 
 
 
-
-
-    // and set the new light colors
-    //if (millis() > lastupdate + INTERVAL) {
-    //  updateLights();
-    //  lastupdate = millis();
-    //}
-
-
-
-    /* Обработчик MQTT для режима "подписчика" */
-    mqttAPI.loop();
-
-/*
-    unsigned long currentCheckMQTTMillis = millis();
-
-    if( (currentCheckMQTTMillis - lastMQTTCheckUpdate ) > MQTTCHECKINTERVAL )
-    {
-
-      #ifdef NDEBUG
-        Serial.println("Check MQTT ");
-      #endif
-
-       checkMQTT();
-
-       if (mqttAPI.connected())
-       {
-         digitalWrite(6, HIGH);
-         mqttUnaviable =0;
-
-         #ifdef NDEBUG
-           Serial.println("MQTT API connected");
-         #endif
-
-       } else if (!bDHCPError)
-       {
-           //setColorState(3);
-           digitalWrite(6, LOW);
-           mqttUnaviable++;
-
-           #ifdef NDEBUG
-             Serial.print("mqttUnaviable: ");
-             Serial.println(mqttUnaviable, DEC);
-           #endif
-
-           if (mqttUnaviable > 21)
-           {
-              resetBoard();
-           }
-       }
-
-         lastMQTTCheckUpdate = currentCheckMQTTMillis;
-    }
-*/
-
-    unsigned long currentMQTTMillis = millis();
-
-       if( (currentMQTTMillis - lastMQTTUpdate ) > MQTTUPDATEINTERVAL )
-       {
-            bReportAll = true;
-            sendDataToMQTT();
-
-
-         lastMQTTUpdate = currentMQTTMillis;
-       }
-
-    //MQTTtimer.run();
-
     uptime();
 
-    //reset watchdog timer
-    //wdt_reset();
+
 
 }
 

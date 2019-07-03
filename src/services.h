@@ -1,17 +1,14 @@
 #ifndef SERVICES_H
 #define SERVICES_H
 
-//#define MQTT_MAX_PACKET_SIZE 256
+
 #include <PubSubClient.h>
-//#include <SimpleTimer.h>
+
 
 
 EthernetClient ethClient;
 PubSubClient mqttAPI(ethClient);
-//SimpleTimer MQTTtimer;
-//SimpleTimer SendToMQTT;
 
-//String MQTTserver;
 
 
 
@@ -75,70 +72,7 @@ asm volatile("jmp 0x00");
 
 }
 
-void callback(char* topic, byte* payload, unsigned int length) {
 
-  String msg, strtopic, topicname1;
-
-  for (unsigned int i = 0; i < length; i++) msg += (char)payload[i];
-  //for (unsigned int i = 0; i < sizeof(topic); i++) strtopic += (char)topic[i];
-
-  #ifdef NDEBUG
-
-    Serial.println(topic);
-  #endif
-
-strtopic = strcat(topic,"");
-
-String commandTopic = MQTTtopic + "/cmd";
-//String brightTopic =  MQTTtopic + "/bright";
-//String resetTopic =  MQTTtopic + "/reset";
-
-
-
-  #ifdef NDEBUG
-    String prstr = "Msg: " + strtopic + " " + msg;
-    Serial.println(prstr.c_str());
-  #endif
-}
-
-void setupMQTT() {
-  if (MQTTserver.length()) {
-    /* Указываем сервер и порт для подключения. Сервер можно указать через WEB интерфейс, порт измените на свой. */
-    //mqttServer = conf.param("mqtt_server");
-    mqttAPI.setServer(MQTTserver.c_str(), 1883);
-
-    /* Устанавливаем обработчик */
-   mqttAPI.setCallback(callback);
-
-  }
-  /* end if */
-}
-
-void checkMQTT()
-{
-  yield();
-  if (!mqttAPI.connected())
-  {
-      if( mqttAPI.connect(MQTTClientID.c_str(), MQTTuser.c_str(), MQTTpwd.c_str()) )
-      {
-
-
-           String subTopic = MQTTtopic + "/cmd";
-            mqttAPI.subscribe(subTopic.c_str());
-            //subTopic = MQTTtopic + "/bright";
-            //mqttAPI.subscribe(subTopic.c_str());
-            //subTopic = MQTTtopic + "/reset";
-            //mqttAPI.subscribe(subTopic.c_str());
-
-      }
-      #ifdef NDEBUG
-        Serial.println("Conn to MQTT. res: " + mqttCodeStr(mqttAPI.state()) );
-      #endif
-  }
-
-
-
-}
 
 
 bool mqttPublish(String topic, String data) {
@@ -152,115 +86,89 @@ bool mqttPublish(String topic, uint32_t data) { return mqttPublish(topic, String
 
 
 void sendDataToMQTT() {
-  if (Ethernet.localIP() and MQTTserver.length() and mqttAPI.connected()) {
-    #ifdef NDEBUG
-      Serial.println(F("send to MQTT"));
-    #endif
+  if (Ethernet.localIP() and MQTTserver.length() ) {
 
-      String state = "DISARMED";
-      String state1;
+    mqttAPI.setServer(MQTTserver.c_str(), 1883);
+    mqttAPI.connect(MQTTClientID.c_str(), MQTTuser.c_str(), MQTTpwd.c_str());
 
-      //mqttPublish("state",   state );
-      //mqttPublish("state/brightness",   lastencoderValue );
+    if (mqttAPI.connected()) {
 
-      /*
-      AlarmState
+         digitalWrite(6, HIGH);
 
-      0 - снята с охраны
-      1 - стоит на охране
-      2 - снятие с охраны
-      3 - постановка на охрану
+      #ifdef NDEBUG
+        Serial.println(F("send to MQTT"));
+        #endif
 
-      */
-
-      switch (currentAlarmState)
-      {
-        case 0:
-          state = "DISARMED";
-          break;
-        case 1:
-          state = "ARMED";
-          break;
-        case 2:
-          state = "DISARMING";
-          break;
-        case 3:
-          state = "ARMING";
-          break;
-      }
+        String state = "DISARMED";
+        String state1;
 
 
-      mqttPublish("state/status",   state );
+        /*
+        AlarmState
 
-      if ( currentAlarmState == 0 || currentAlarmState == 1 )
-      {
+        0 - снята с охраны
+        1 - стоит на охране
+        2 - снятие с охраны
+        3 - постановка на охрану
+
+        */
+
         switch (currentAlarmState)
         {
           case 0:
-            state = "OFF";
+            state = "DISARMED";
             break;
-          case 1:
-            state = "ON";
+            case 1:
+            state = "ARMED";
             break;
-        }
+            case 2:
+            state = "DISARMING";
+            break;
+            case 3:
+            state = "ARMING";
+            break;
+          }
 
-        mqttPublish("state",   state1 );
+
+          mqttPublish("state/status",   state );
+
+          if ( currentAlarmState == 0 || currentAlarmState == 1 )
+          {
+            switch (currentAlarmState)
+            {
+              case 0:
+              state1 = "OFF";
+              break;
+              case 1:
+              state1 = "ON";
+              break;
+            }
+
+            mqttPublish("state",   state1 );
+          }
+
+          if (bReportAll)
+          {
+            mqttPublish("state/ip",   DisplayAddress(Ethernet.localIP()) );
+
+            String sUptime = String(Day) + "d " + String(Hour) + ":" + String(Minute) + ":" + String(Second);
+            mqttPublish("state/uptime",   sUptime );
+
+            bReportAll = false;
+          }
+
+          #ifdef NDEBUG
+          Serial.println( "answer: " +  mqttCodeStr(mqttAPI.state()));
+          #endif
+
+                   digitalWrite(6, LOW);
+
       }
-
-      if (bReportAll)
-      {
-        mqttPublish("state/ip",   DisplayAddress(Ethernet.localIP()) );
-
-        String sUptime = String(Day) + "d " + String(Hour) + ":" + String(Minute) + ":" + String(Second);
-        mqttPublish("state/uptime",   sUptime );
-
-        bReportAll = false;
-      }
-
-      #ifdef NDEBUG
-        Serial.println( "answer: " +  mqttCodeStr(mqttAPI.state()));
-      #endif
-  }
-}
-
-/*
-void setColorState(uint8_t state)
-{
-  switch (state)
-  {
-    case 0:
-    {
-      digitalWrite(LED_BLUE,HIGH);
-      digitalWrite(LED_GREEN,LOW);
-      digitalWrite(LED_RED,HIGH);
-    }
-    break;
-    case 1:
-    {
-      digitalWrite(LED_BLUE,LOW);
-      digitalWrite(LED_GREEN,HIGH);
-      digitalWrite(LED_RED,HIGH);
-    }
-
-    break;
-    case 2:
-    {
-      digitalWrite(LED_BLUE,HIGH);
-      digitalWrite(LED_GREEN,HIGH);
-      digitalWrite(LED_RED,LOW);
-    }
-    break;
-    case 3:
-    {
-      digitalWrite(LED_BLUE,HIGH);
-      digitalWrite(LED_GREEN,HIGH);
-      digitalWrite(LED_RED,HIGH);
-    }
-    break;
   }
 
 }
-*/
+
+
 
 
 
