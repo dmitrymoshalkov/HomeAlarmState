@@ -68,6 +68,18 @@ void resetBoard()
   //while (true) {
   //  delay(1);
   //}
+
+  for (uint8_t i=0; i<=5; i++)
+  {
+       analogWrite(5, 255);
+       delay(300);
+       analogWrite(5, 0);     
+  }
+
+  digitalWrite(ETHERNET_RESET_PIN, LOW);
+  delay(800); //100
+  digitalWrite(ETHERNET_RESET_PIN, HIGH);
+  
 asm volatile("jmp 0x00");
 
 }
@@ -93,7 +105,7 @@ void sendDataToMQTT() {
 
     if (mqttAPI.connected()) {
 
-         digitalWrite(6, HIGH);
+         analogWrite(6, 255);
 
       #ifdef NDEBUG
         Serial.println(F("send to MQTT"));
@@ -101,6 +113,7 @@ void sendDataToMQTT() {
 
         String state = "DISARMED";
         String state1;
+        String powerstate;
 
 
         /*
@@ -147,12 +160,30 @@ void sendDataToMQTT() {
             mqttPublish("state",   state1 );
           }
 
+
+                    if ( current_Mains_state )
+                    {
+                        powerstate = "ON";
+                    }
+                    else
+                    {
+                        powerstate = "OFF"; 
+                    }
+
+            mqttPublish("state/power",   powerstate );
+
+
           if (bReportAll)
           {
+               
+
+
             mqttPublish("state/ip",   DisplayAddress(Ethernet.localIP()) );
 
             String sUptime = String(Day) + "d " + String(Hour) + ":" + String(Minute) + ":" + String(Second);
             mqttPublish("state/uptime",   sUptime );
+
+
 
             bReportAll = false;
           }
@@ -161,7 +192,7 @@ void sendDataToMQTT() {
           Serial.println( "answer: " +  mqttCodeStr(mqttAPI.state()));
           #endif
 
-                   digitalWrite(6, LOW);
+                   analogWrite(6, 0);
 
       }
   }
