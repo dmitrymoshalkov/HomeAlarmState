@@ -34,7 +34,7 @@ byte gateway[] = { 10, 11, 13, 1 };
 byte subnet[] = { 255, 255, 255, 0 };
 
 
-String MQTTserver = "192.168.100.124";
+String MQTTserver = "192.168.100.110";
 String MQTTuser = "openhabian";
 String MQTTpwd = "damp19ax";
 String MQTTtopic = "home/common/secalarm";
